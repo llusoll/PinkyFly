@@ -5,100 +5,114 @@ using System.Linq;
 
 namespace Lab4
 {
+    public enum BookingStatus { Confirmed, Paid, Canceled }
 
-    public enum BookingStatus
+    public abstract class Booking : ICloneable
     {
-        Confirmed,
-        Paid,
-        Canceled
-    }
+        // Защищённые поля — доступны в потомках
+        protected string bookingNumber;
+        protected string flightNumber;
+        protected string passengerId;
+        protected string seatNumber;
+        protected BookingStatus status;
+        protected double basePrice;
+        protected string bookingDate;
+        protected double priceMultiplier = 1.0;
 
-    public class Booking
-    {
-        public string BookingNumber { get; set; }
-        public string FlightNumber { get; set; }
-        public string PassengerId { get; set; }
-        public string SeatNumber { get; set; }
-        public BookingStatus Status { get; set; }
-        public double Price { get; set; }
-        public string BookingDate { get; set; }
+        // Статическое поле
+        public static int TotalBookings { get; private set; }
 
-        public Booking() { }
-
-        public Booking(string pnr, string fn, string pid, string seat, BookingStatus st, double pr, string date)
+        // Конструктор с вызовом из потомков
+        protected Booking(string pnr, string fn, string pid, string seat, BookingStatus st, double basePr, string date)
         {
-            BookingNumber = pnr;
-            FlightNumber = fn;
-            PassengerId = pid;
-            SeatNumber = seat;
-            Status = st;
-            Price = pr;
-            BookingDate = date;
+            bookingNumber = pnr;
+            flightNumber = fn;
+            passengerId = pid;
+            seatNumber = seat;
+            status = st;
+            basePrice = basePr;
+            bookingDate = date;
+            TotalBookings++;
         }
 
-        public static string StatusToString(BookingStatus s)
+        // === АБСТРАКТНЫЕ МЕТОДЫ ===
+        public abstract double CalculatePrice();
+        public abstract string GetDescription();
+
+        // === ВИРТУАЛЬНЫЙ метод с реализацией ===
+        public virtual void Cancel()
         {
-            return s switch
+            if (status == BookingStatus.Paid)
+                throw new InvalidOperationException("Нельзя отменить оплаченное бронирование без возврата.");
+            status = BookingStatus.Canceled;
+        }
+
+        // === СВОЙСТВА (публичные геттеры) ===
+        public string BookingNumber => bookingNumber;
+        public string FlightNumber => flightNumber;
+        public string PassengerId => passengerId;
+        public string SeatNumber => seatNumber;
+        public BookingStatus Status => status;
+        public double BasePrice => basePrice;          // <-- ДОБАВЛЕНО для безопасного доступа извне
+        public string BookingDate => bookingDate;      // <-- ДОБАВЛЕНО
+
+        // === КЛОНИРОВАНИЕ ===
+        public object Clone() => MemberwiseClone();  // поверхностное
+        public abstract Booking DeepClone();         // глубокое — реализуем в потомках
+
+        // === СТАТИЧЕСКИЕ МЕТОДЫ ===
+        public static string StatusToString(BookingStatus s) =>
+            s switch
             {
                 BookingStatus.Confirmed => "Confirmed",
                 BookingStatus.Paid => "Paid",
                 BookingStatus.Canceled => "Canceled",
                 _ => "Confirmed"
             };
-        }
 
-        public static BookingStatus StringToStatus(string s)
-        {
-            return s switch
+        public static BookingStatus StringToStatus(string s) =>
+            s switch
             {
                 "Confirmed" => BookingStatus.Confirmed,
                 "Paid" => BookingStatus.Paid,
                 "Canceled" => BookingStatus.Canceled,
                 _ => BookingStatus.Confirmed
             };
-        }
 
-        public void CancelBooking()
-        {
-            Status = BookingStatus.Canceled;
-        }
-
-        public void ConfirmPayment()
-        {
-            Status = BookingStatus.Paid;
-        }
-
-        public void ChangeSeat(string newSeat)
-        {
-            SeatNumber = newSeat;
-        }
-
+        // === ЗАГРУЗКА / СОХРАНЕНИЕ ===
         public static List<Booking> LoadAll()
         {
             var bookings = new List<Booking>();
-            if (!File.Exists("data/bookings.txt"))
-                return bookings;
+            if (!File.Exists("data/bookings.txt")) return bookings;
 
             foreach (var line in File.ReadAllLines("data/bookings.txt"))
             {
                 if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
-
                 var parts = Utils.Split(line, ';');
-                if (parts.Count != 7) continue;
+                if (parts.Count != 8) continue;
 
-                var bk = new Booking
+                try
                 {
-                    BookingNumber = parts[0],
-                    FlightNumber = parts[1],
-                    PassengerId = parts[2],
-                    SeatNumber = parts[3],
-                    Status = StringToStatus(parts[4]),
-                    Price = double.Parse(parts[5]),
-                    BookingDate = parts[6]
-                };
-                bookings.Add(bk);
-            }
+                    string type = parts[0];
+                    var pnr = parts[1];
+                    var fn = parts[2];
+                    var pid = parts[3];
+                    var seat = parts[4];
+                    var status = StringToStatus(parts[5]);
+                    var basePrice = double.Parse(parts[6]);
+                    var date = parts[7];
 
+                    if (type == "ECONOMY")
+                        bookings.Add(new EconomyBooking(pnr, fn, pid, seat, status, basePrice, date));
+                    else if (type == "BUSINESS")
+                        bookings.
+Add(new BusinessBooking(pnr, fn, pid, seat, status, basePrice, date));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Пропущено: {ex.Message}");
+                }
+            }
             return bookings;
         }
 
@@ -106,15 +120,16 @@ namespace Lab4
         {
             Utils.EnsureDataDir();
             using var writer = new StreamWriter("data/bookings.txt", false);
-            writer.WriteLine("# PNR;Flight;Passenger;Seat;Status;Price;Date");
+            writer.WriteLine("# Type;PNR;Flight;Passenger;Seat;Status;BasePrice;Date");
             foreach (var b in bookings)
             {
-                writer.WriteLine($"{b.BookingNumber};{b.FlightNumber};{b.PassengerId};{b.SeatNumber};" +
-                                 $"{StatusToString(b.Status)};{b.Price};{b.BookingDate}");
+                string type = b is EconomyBooking ? "ECONOMY" : "BUSINESS";
+                writer.WriteLine($"{type};{b.BookingNumber};{b.FlightNumber};{b.PassengerId};{b.SeatNumber};" +
+                                 $"{StatusToString(b.Status)};{b.BasePrice};{b.BookingDate}");
             }
         }
 
-
+        // === ВЫВОД ТАБЛИЦЫ ===
         public static void DisplayTable(List<Booking> list)
         {
             if (list == null || list.Count == 0)
@@ -122,42 +137,24 @@ namespace Lab4
                 Console.WriteLine("Нет данных.");
                 return;
             }
-
             Console.WriteLine("\n=== Бронирования ===");
-
-            // Ширины колонок 
-            int pnrWidth = 10;
-            int flightWidth = 12;
-            int passengerWidth = 14;
-            int seatWidth = 10;
-            int statusWidth = 12;
-
-            // Заголовок — первая строка таблицы 
-            Console.WriteLine(
-                $"{LeftPad("PNR", pnrWidth)} " +
-                $"{LeftPad("Рейс", flightWidth)} " +
-                $"{LeftPad("Пассажир", passengerWidth)} " +
-                $"{LeftPad("Место", seatWidth)} " +
-                $"{LeftPad("Статус", statusWidth)}"
-            );
-
-            // Горизонтальная линия (опционально, для наглядности)
+            int pnrWidth = 10, flightWidth = 12, passengerWidth = 14, seatWidth = 10, statusWidth = 12;
+            Console.WriteLine($"{LeftPad("PNR", pnrWidth)}" +
+                              $"{LeftPad("Рейс", flightWidth)}" +
+                              $"{LeftPad("Пассажир", passengerWidth)}" +
+                              $"{LeftPad("Место", seatWidth)}" +
+                              $"{LeftPad("Статус", statusWidth)}");
             Console.WriteLine(new string('-', pnrWidth + flightWidth + passengerWidth + seatWidth + statusWidth + 4));
-
-            // Данные
             foreach (var b in list)
             {
-                Console.WriteLine(
-                    $"{LeftPad(b.BookingNumber, pnrWidth)} " +
-                    $"{LeftPad(b.FlightNumber, flightWidth)} " +
-                    $"{LeftPad(b.PassengerId, passengerWidth)} " +
-                    $"{LeftPad(b.SeatNumber, seatWidth)} " +
-                    $"{LeftPad(StatusToString(b.Status), statusWidth)}"
-                );
+                Console.WriteLine($"{LeftPad(b.BookingNumber, pnrWidth)}" +
+                                  $"{LeftPad(b.FlightNumber, flightWidth)}" +
+                                  $"{LeftPad(b.PassengerId, passengerWidth)}" +
+                                  $"{LeftPad(b.SeatNumber, seatWidth)}" +
+                                  $"{LeftPad(StatusToString(b.Status), statusWidth)}");
             }
         }
 
-        // Вспомогательный метод для выравнивания текста слева (аналог setw + left в C++)
         private static string LeftPad(string text, int width)
         {
             if (text == null) text = "";

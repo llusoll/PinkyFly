@@ -1,11 +1,11 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
 namespace Lab4
 {
-
     public enum FlightStatus
     {
         Scheduled,
@@ -17,6 +17,9 @@ namespace Lab4
 
     public class Flight
     {
+        // Статическое поле — счётчик всех созданных рейсов
+        public static int TotalCount { get; private set; } = 0;
+
         public string FlightNumber { get; set; }
         public string AircraftTail { get; set; }
         public string DepartureAirport { get; set; }
@@ -44,6 +47,7 @@ namespace Lab4
             Status = FlightStatus.Scheduled;
             BasePriceEconomy = eco;
             BasePriceBusiness = biz;
+            TotalCount++; // инкремент счётчика
         }
 
         public static string StatusToString(FlightStatus s)
@@ -99,10 +103,8 @@ namespace Lab4
             foreach (var line in File.ReadAllLines("data/flights.txt"))
             {
                 if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
-
                 var parts = Utils.Split(line, ';');
                 if (parts.Count < 11) continue;
-
                 var fl = new Flight
                 {
                     FlightNumber = parts[0],
@@ -117,9 +119,8 @@ namespace Lab4
                     BasePriceEconomy = double.Parse(parts[9]),
                     BasePriceBusiness = double.Parse(parts[10])
                 };
-                flights.Add(fl);
+                //TotalCount не инкрементируем здесь — только при создании новых рейсов
             }
-
             return flights;
         }
 
@@ -131,13 +132,11 @@ namespace Lab4
             foreach (var fl in flights)
             {
                 writer.WriteLine($"{fl.FlightNumber};{fl.AircraftTail};{fl.DepartureAirport};{fl.ArrivalAirport};" +
-                                 $"{fl.ScheduledDeparture};{fl.
-    ScheduledArrival};{fl.ActualDeparture};{fl.ActualArrival};" +
+                                 $"{fl.ScheduledDeparture};{fl.ScheduledArrival};{fl.ActualDeparture};{fl.ActualArrival};" +
                                  $"{StatusToString(fl.Status)};{fl.BasePriceEconomy};{fl.BasePriceBusiness}");
             }
         }
 
-        // Таблица рейсов
         public static void DisplayTable(List<Flight> list)
         {
             if (list == null || list.Count == 0)
@@ -147,20 +146,17 @@ namespace Lab4
             }
 
             Console.WriteLine("\n=== Рейсы ===");
-
             int flightWidth = 12;
             int routeWidth = 18;
             int timeWidth = 20;
             int statusWidth = 12;
 
-            // Заголовок — первая строка 
             Console.WriteLine(
                 $"{LeftPad("Рейс", flightWidth)} " +
                 $"{LeftPad("Маршрут", routeWidth)} " +
                 $"{LeftPad("Вылет (расп.)", timeWidth)} " +
                 $"{LeftPad("Статус", statusWidth)}"
             );
-
             Console.WriteLine(new string('-', flightWidth + routeWidth + timeWidth + statusWidth + 3));
 
             foreach (var f in list)

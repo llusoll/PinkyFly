@@ -4,9 +4,11 @@ using System.IO;
 
 namespace Lab4
 {
-
     public class Passenger
     {
+        // Статическое поле — счётчик всех пассажиров
+        public static int TotalCount { get; private set; } = 0;
+
         public string PassengerId { get; set; }
         public string FirstName { get; set; }
         public string LastName { get; set; }
@@ -26,6 +28,7 @@ namespace Lab4
             PassportNumber = passport;
             ContactPhone = phone;
             Email = email;
+            TotalCount++; // инкремент счётчика
         }
 
         public void UpdateContactInfo(string phone, string email)
@@ -36,7 +39,7 @@ namespace Lab4
 
         public bool ValidatePassport()
         {
-            return PassportNumber != null && PassportNumber.Length >= 6 && PassportNumber.Length <= 15;
+            return !string.IsNullOrEmpty(PassportNumber) && PassportNumber.Length >= 6 && PassportNumber.Length <= 15;
         }
 
         public static List<Passenger> LoadAll()
@@ -48,13 +51,10 @@ namespace Lab4
             foreach (var line in File.ReadAllLines("data/passengers.txt"))
             {
                 if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
-
                 var parts = Utils.Split(line, ';');
                 if (parts.Count != 7) continue;
-
                 passengers.Add(new Passenger(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]));
             }
-
             return passengers;
         }
 
@@ -70,7 +70,6 @@ namespace Lab4
             }
         }
 
-        // Таблица пассажиров
         public static void DisplayTable(List<Passenger> list)
         {
             if (list == null || list.Count == 0)
@@ -80,20 +79,17 @@ namespace Lab4
             }
 
             Console.WriteLine("\n=== Пассажиры ===");
-
             int passportWidth = 16;
             int nameWidth = 20;
             int phoneWidth = 14;
             int emailWidth = 20;
 
-            // Заголовок — первая строка 
             Console.WriteLine(
                 $"{LeftPad("Паспорт", passportWidth)} " +
                 $"{LeftPad("ФИО", nameWidth)} " +
                 $"{LeftPad("Телефон", phoneWidth)} " +
                 $"{LeftPad("Email", emailWidth)}"
             );
-
             Console.WriteLine(new string('-', passportWidth + nameWidth + phoneWidth + emailWidth + 3));
 
             foreach (var p in list)
