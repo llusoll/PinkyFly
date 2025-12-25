@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Lab4
 {
-
     public static class Utils
     {
         public static List<string> Split(string s, char delimiter)
@@ -35,5 +35,14 @@ namespace Lab4
                 return builder.ToString();
             }
         }
+
+
+        public static double SafeAverage(IReadOnlyList<double> values)
+        {
+            if (values == null || values.Count == 0) return 0.0;
+            return values.Average();
+        }
+
     }
 }
+
